@@ -1,0 +1,156 @@
+# ShipCheck — Release Readiness for Jira
+# Codegeist 2026 entry.
+# Category: Apps for Software Teams
+# Bonus prizes: Best app with Atlassian MCP (primary) + Best Agents - Rovo/Assignable agents (secondary)
+modules:
+  function:
+    - key: readiness-fn
+      handler: actions.getReadiness
+    - key: blockers-fn
+      handler: actions.listBlockers
+    - key: context-fn
+      handler: actions.getIssueContext
+    - key: followup-fn
+      handler: actions.createFollowup
+    - key: ui-resolver
+      handler: resolver.handler
+  rovo:mcp:
+    - key: shipcheck-mcp
+      name: ShipCheck MCP
+      tools:
+        - shipcheck-readiness
+        - shipcheck-blockers
+        - shipcheck-issue-context
+        - shipcheck-create-followup
+  rovo:agent:
+    - key: shipcheck-agent
+      name: ShipCheck
+      description: Release-readiness assistant for Jira. Ask if a release is ready to
+        ship, what is blocking it, or for the full context of an issue.
+      prompt: >
+        You are ShipCheck, a release-readiness assistant for Jira software
+        teams. Your job is to answer one question with evidence, not gut
+        feeling: "Is this release ready to ship?" You have four tools: -
+        shipcheck-readiness: compute the readiness score (0-100) for a Jira
+        version (fixVersion) in a project, with a breakdown and the blocking
+        issues. Use this first when a user asks if a release is ready. -
+        shipcheck-blockers: list the issues blocking a release version. -
+        shipcheck-issue-context: get the full context of a single Jira issue
+        (summary, status, assignee, priority, comments, linked issues). -
+        shipcheck-create-followup: create a follow-up Jira issue for a blocker.
+        Always ground your answer in the tool output. Quote the score and the
+        verdict, then list the top blockers by key with one line each explaining
+        why they block the release. If the user does not give a project key or a
+        version name, ask for them (a project key looks like SCRUM, a version
+        like 2.3). Never invent issue keys, statuses, or scores. If a tool
+        returns an error, say so plainly and suggest what to check.
+      conversationStarters:
+        - Is release 2.3 ready to ship?
+        - What is blocking our next release?
+        - Show me the context for an issue
+      actions:
+        - shipcheck-readiness
+        - shipcheck-blockers
+        - shipcheck-issue-context
+        - shipcheck-create-followup
+  action:
+    - key: shipcheck-readiness
+      name: Get release readiness
+      function: readiness-fn
+      actionVerb: GET
+      description: >
+        Compute the release-readiness score (0-100) for a Jira version
+        (fixVersion) in a project, with a breakdown of done vs open work and the
+        blocking issues.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: true
+          description: The Jira project key, for example SCRUM
+        versionName:
+          title: Version name
+          type: string
+          required: true
+          description: The fixVersion name, for example 2.3
+    - key: shipcheck-blockers
+      name: List release blockers
+      function: blockers-fn
+      actionVerb: GET
+      description: >
+        List the issues blocking a Jira release version: open Blocker or
+        Critical issues, issues blocked by an unresolved linked issue,
+        unassigned open issues, and overdue open issues.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: true
+          description: The Jira project key, for example SCRUM
+        versionName:
+          title: Version name
+          type: string
+          required: true
+          description: The fixVersion name, for example 2.3
+    - key: shipcheck-issue-context
+      name: Get issue context
+      function: context-fn
+      actionVerb: GET
+      description: >
+        Get the full context of a Jira issue: summary, status, assignee,
+        priority, due date, comments, linked issues, and linked Confluence
+        pages.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: true
+          description: The Jira issue key, for example SCRUM-123
+    - key: shipcheck-create-followup
+      name: Create follow-up issue
+      function: followup-fn
+      actionVerb: CREATE
+      description: >
+        Create a follow-up Jira issue in a project, for example to track a
+        release blocker that needs fixing before the release ships.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: true
+          description: The Jira project key, for example SCRUM
+        summary:
+          title: Summary
+          type: string
+          required: true
+          description: A short summary for the follow-up issue
+        description:
+          title: Description
+          type: string
+          required: false
+          description: A longer description for the follow-up issue
+        issueType:
+          title: Issue type
+          type: string
+          required: false
+          description: The issue type name, for example Task. Defaults to Task.
+  jira:projectPage:
+    - key: shipcheck-project-page
+      resource: main
+      resolver:
+        function: ui-resolver
+      render: native
+      title: ShipCheck
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/9d2abdab-e2cd-4488-b466-ef352228f46e
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
